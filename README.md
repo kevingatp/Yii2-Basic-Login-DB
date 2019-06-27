@@ -233,10 +233,11 @@ vendor/bin/codecept run functional,unit -- --coverage-html --coverage-xml
 You can see code coverage output under the `tests/_output` directory.
 
 
-# Yii Login Using Database
+# Steps for Login Using Database
 
 ## User Table
-Make sure you've created table *user* in database
+This table will contain row of user data. Before we take this step, make sure the app have connect to database through `db.php`
+Make sure you've created table *user* in database, you can create using this sql query
 ```
 DROP TABLE IF EXISTS `user`;
 
@@ -261,10 +262,14 @@ CREATE TABLE `user` (
 ```
 
 ## Generate User Model
-Generate Model through GII, and overwrite previous (default) *user* model
+Generate Model through GII, and overwrite previous (default) *user* model.
+
+Model act as a bridge that will manage, control, and manipulate data base on the instruction that has given by controller.
+
+This class will manage the data for user table.
 
 Now, let's modify the model that just generated.
-Add this is script into	*User.php* in dir **models** for initializing class
+Add this is script into	`User.php` for import the libray that will use in this class
 ```
 use yii\base\NotSupportedException;
 use yii\db\ActiveRecord;
@@ -272,19 +277,12 @@ use yii\base\Security;
 use yii\web\IdentityInterface;
 ```
 
-and modify your class extend from
+and then, this class should implements *IdentityInterface*, so the class become
 ```
-class User extends \yii\db\ActiveRecord {
-```
-
-into 
-```
-class User extends ActiveRecord  implements IdentityInterface {
+class User extends ActiveRecord implements IdentityInterface {
 ```
 
-for implementing the **IdentityInterface**
-
-Add this function inside *user* class
+after that, we need to modify the method inside this class, become:
 ```   
     /**
      * {@inheritdoc}
@@ -401,7 +399,9 @@ Add this function inside *user* class
 ```
 
 ## Signup Model
-Create the signup model
+This class will manage the data of new user.
+
+Create the `signup.php` in `models/`
 ```
 <?php
 
@@ -461,7 +461,7 @@ class SignupForm extends Model {
 
 ```
 
-After that, Create a new file named *signup.php* for the form
+After that, Create a new file named `signup.php` for the form in `view/site/`
 ```
     <?php
 
@@ -491,7 +491,7 @@ After that, Create a new file named *signup.php* for the form
     </div>
 ```
 
-Last, add the signup method in controller
+Last, add the signup method in controller to create new user
 ```
 public function actionAddAdmin() {
         $model = User::find()->where(['username' => 'admin'])->one();
@@ -512,3 +512,38 @@ Add this above the controller class to import the SignupForm model
 ```
 use app\models\SignupForm;
 ```
+
+**NOTES:**
+- In this app, I've set the Signup / Registration menu only appear if login as admin.
+- So before create a new user, I set another method for create admin account.
+
+## Create Admin account
+Username : `admin`
+Password : `basic`
+
+Import the *user* model inside `SiteController.php` in `controllers/`
+```
+use app\models\User;
+```
+
+and then, add this script inside the class
+```
+    public function actionAddAdmin() {
+        $model = User::find()->where(['username' => 'admin'])->one();
+        if (empty($model)) {
+            $user = new User();
+            $user->username = 'admin';
+            $user->email = 'kevingatpardosi@gmail.com';
+            $user->setPassword('basic');
+            $user->generateAuthKey();
+            if ($user->save()) {
+                return $this->goBack();
+            }
+        }
+    }
+```
+
+after that, access the method through url
+`http://localhost/<app-name>/web/index.php?r=site%2Fadd-admin`
+
+**NOTE:** Do not forget to change the `<app-name>` with your project name.
