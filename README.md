@@ -2,7 +2,7 @@
     <a href="https://github.com/yiisoft" target="_blank">
         <img src="https://avatars0.githubusercontent.com/u/993323" height="100px">
     </a>
-    <h1 align="center">Yii 2 Basic Project Template</h1>
+    <h1 align="center">Yii2 Basic Template</h1>
     <br>
 </p>
 
@@ -51,7 +51,7 @@ at [getcomposer.org](http://getcomposer.org/doc/00-intro.md#installation-nix).
 You can then install this project template using the following command:
 
 ~~~
-composer create-project --prefer-dist yiisoft/yii2-app-basic basic
+php composer.phar create-project --prefer-dist --stability=dev yiisoft/yii2-app-basic basic
 ~~~
 
 Now you should be able to access the application through the following URL, assuming `basic` is the directory
@@ -231,4 +231,285 @@ vendor/bin/codecept run functional,unit -- --coverage-html --coverage-xml
 ```
 
 You can see code coverage output under the `tests/_output` directory.
-# Yii2-Basic-Login-DB
+
+
+# Yii Login Using Database
+
+## User Table
+Make sure you've created table *user* in database
+```
+DROP TABLE IF EXISTS `user`;
+
+CREATE TABLE `user` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `username` varchar(32) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `auth_key` varchar(32),
+  `confirmed_at` int(32) DEFAULT NULL,
+  `unconfirmed_email` varchar(255) DEFAULT NULL,
+  `blocked_at` int(11) DEFAULT NULL,
+  `registration_ip` varchar(45) DEFAULT NULL,
+  `created_at` int(11),
+  `updated_at` int(11),
+  `flags` int(11),
+  `last_login_at` int(11) DEFAULT NULL,
+  `parentId` int(11) DEFAULT NULL,
+  `separated_by` varchar(1) DEFAULT '0',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+```
+
+## Generate User Model
+Generate Model through GII, and overwrite previous (default) *user* model
+
+
+## Method for User Login
+Add this is script into	*User.php* in dir **models** for initializing class
+```
+use yii\base\NotSupportedException;
+use yii\db\ActiveRecord;
+use yii\base\Security;
+use yii\web\IdentityInterface;
+```
+
+and modify your class extend from
+```
+class User extends \yii\db\ActiveRecord {
+```
+
+into 
+```
+class User extends ActiveRecord  implements IdentityInterface {
+```
+
+for implementing the **IdentityInterface**
+
+Add this function inside *user* class
+```   
+    /**
+     * {@inheritdoc}
+     */
+    public static function findIdentity($id) {
+        return static::findOne($id);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    /* modified */
+    public static function findIdentityByAccessToken($token, $type = null) {
+        return static::findOne(['access_token' => $token]);
+    }
+
+    /* removed
+      public static function findIdentityByAccessToken($token)
+      {
+      throw new NotSupportedException('"findIdentityByAccessToken" is not implemented.');
+      }
+     */
+
+    /**
+     * Finds user by username
+     *
+     * @param  string      $username
+     * @return static|null
+     */
+    public static function findByUsername($username) {
+        return static::findOne(['username' => $username]);
+    }
+
+    /**
+     * Finds user by password reset token
+     *
+     * @param  string      $token password reset token
+     * @return static|null
+     */
+    public static function findByPasswordResetToken($token) {
+        $expire = \Yii::$app->params['user.passwordResetTokenExpire'];
+        $parts = explode('_', $token);
+        $timestamp = (int) end($parts);
+        if ($timestamp + $expire < time()) {
+            // token expired
+            return null;
+        }
+
+        return static::findOne([
+                    'password_reset_token' => $token
+        ]);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getId() {
+        return $this->getPrimaryKey();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getAuthKey() {
+        return $this->auth_key;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function validateAuthKey($authKey) {
+        return $this->getAuthKey() === $authKey;
+    }
+
+    /**
+     * Validates password
+     *
+     * @param  string  $password password to validate
+     * @return boolean if password provided is valid for current user
+     */
+    public function validatePassword($password) {
+        return Yii::$app->security->validatePassword($password, $this->password_hash);
+    }
+
+    /**
+     * Generates password hash from password and sets it to the model
+     *
+     * @param string $password
+     */
+    public function setPassword($password) {
+        $this->password_hash = Yii::$app->security->generatePasswordHash($password);
+    }
+
+    /**
+     * Generates "remember me" authentication key
+     */
+    public function generateAuthKey() {
+        $this->auth_key = Security::generateRandomKey();
+    }
+
+    /**
+     * Generates new password reset token
+     */
+    public function generatePasswordResetToken() {
+        $this->password_reset_token = Security::generateRandomKey() . '_' . time();
+    }
+
+    /**
+     * Removes password reset token
+     */
+    public function removePasswordResetToken() {
+        $this->password_reset_token = null;
+    }
+```
+
+## Register User
+Create the signup model
+```
+<?php
+
+namespace app\models;
+
+use Yii;
+use yii\base\Model;
+
+/**
+ * Signup form
+ */
+class SignupForm extends Model {
+
+    public $username;
+    public $email;
+    public $password;
+
+    /**
+     * @inheritdoc
+     */
+    public function rules() {
+        return [
+            ['username', 'trim'],
+            ['username', 'required'],
+            ['username', 'unique', 'targetClass' => '\app\models\User', 'message' => 'This username has already been taken.'],
+            ['username', 'string', 'min' => 2, 'max' => 255],
+            ['email', 'trim'],
+            ['email', 'required'],            
+            ['email', 'email'],
+            ['email', 'string', 'max' => 255],
+            ['email', 'unique', 'targetClass' => '\app\models\User', 'message' => 'This email address has already been taken.'],
+            ['password', 'required'],
+            ['password', 'string', 'min' => 6],
+        ];
+    }
+
+    /**
+     * Signs user up.
+     *
+     * @return User|null the saved model or null if saving fails
+     */
+    public function signup() {
+
+        if (!$this->validate()) {
+            return null;
+        }
+        
+        $user = new User();
+        $user->username = $this->username;
+        $user->email = $this->email;
+        $user->setPassword($this->password);
+        $user->generateAuthKey();
+        return $user->save(false) ? $user : null;
+    }
+
+}
+
+```
+
+After that, Create a new file named *signup.php* for the form
+```
+    <?php
+
+    use yii\helpers\Html;
+    use yii\bootstrap\ActiveForm;
+
+    $this->title = 'Signup';
+    $this->params['breadcrumbs'][] = $this->title;
+    ?>
+    <div class="site-signup">
+        <h1><?= Html::encode($this->title) ?></h1>
+        <p>Please fill out the following fields to signup:</p>
+        <div class="row">
+            <div class="col-lg-5">
+
+                <?php $form = ActiveForm::begin(['id' => 'form-signup']); ?>
+                <?= $form->field($model, 'username')->textInput(['autofocus' => true]) ?>
+                <?= $form->field($model, 'email') ?>
+                <?= $form->field($model, 'password')->passwordInput() ?>
+                <div class="form-group">
+                    <?= Html::submitButton('Signup', ['class' => 'btn btn-primary', 'name' => 'signup-button']) ?>
+                </div>
+                <?php ActiveForm::end(); ?>
+
+            </div>
+        </div>
+    </div>
+```
+
+Last, add the signup method in controller
+```
+public function actionAddAdmin() {
+        $model = User::find()->where(['username' => 'admin'])->one();
+        if (empty($model)) {
+            $user = new User();
+            $user->username = 'admin';
+            $user->email = 'kevingatpardosi@gmail.com';
+            $user->setPassword('basic');
+            $user->generateAuthKey();
+            if ($user->save()) {
+                return $this->goBack();
+            }
+        }
+    }
+```
+
+Add this above the controller class
+```
+use app\models\SignupForm;
+```
