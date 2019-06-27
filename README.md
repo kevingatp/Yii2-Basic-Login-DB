@@ -263,8 +263,7 @@ CREATE TABLE `user` (
 ## Generate User Model
 Generate Model through GII, and overwrite previous (default) *user* model
 
-
-## Method for User Login
+Now, let's modify the model that just generated.
 Add this is script into	*User.php* in dir **models** for initializing class
 ```
 use yii\base\NotSupportedException;
@@ -401,7 +400,7 @@ Add this function inside *user* class
     }
 ```
 
-## Register User
+## Signup Model
 Create the signup model
 ```
 <?php
@@ -509,7 +508,7 @@ public function actionAddAdmin() {
     }
 ```
 
-Add this above the controller class
+Add this above the controller class to import the SignupForm model
 ```
 use app\models\SignupForm;
 ```
